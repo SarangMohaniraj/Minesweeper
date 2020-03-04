@@ -19,7 +19,7 @@ public class Minesweeper extends JPanel{
 
     northPanel = new JPanel();
     northPanel.setLayout(new GridLayout(2,1));
-    
+
     menuBar = new JMenuBar();
     game = new JMenu("Game");
 
@@ -40,19 +40,19 @@ public class Minesweeper extends JPanel{
     menuBar.add(controls);
 
     northPanel.add(menuBar);
-    
-   
+
+
     frame.add(northPanel,BorderLayout.NORTH);
     gamePanel = new JPanel();
     grid = new Grid(Grid.BEGINNER,gamePanel);
     frame.add(gamePanel,BorderLayout.CENTER);
 
-    frame.setSize(900,1000);
+    frame.setSize(32*grid.getNumRows(),32*grid.getNumCols()+95);
     frame.setVisible(true);
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
   }
 
-  
+
 
   public void paintComponent(Graphics g){
     super.paintComponent(g);
