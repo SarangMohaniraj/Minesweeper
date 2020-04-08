@@ -16,60 +16,110 @@ public class Grid{
  * if 0, it will show an empty, clicked block
  * if 1-8, it will display the number of bombs
  */
-public static final int EMPTY = -10;
+public static final int BLOCK = -10;
 public static final int BOMB = -2;
 public static final int FLAG = -1;
 
+public static final String CLASSIC = "classic";
+public static final String MONOCHROME = "monochrome";
+public static final String MARIO_KART = "mario_kart";
 
 
-  private int bombs;
+private String theme;
+public static ImageIcon block, empty, one, two, three, four, five, six, seven, eight, mine, clickedmine, flagged, facedead, faceooh, facepressed, facesmile, facewin;
+
+  private int rows = 9 , cols = 9, bombs = 10, initBombs = 10, numSelected = 0;
   private Tile[][] grid;
   public static boolean firstClick;
   java.util.Timer timer;
   private int time;
 
-  public Grid(int mode, JPanel panel){
-    panel.setLayout(new GridLayout(9,9));
-    createGrid(mode,panel);
+  private int mode;
+  private JFrame frame;
+  private JPanel panel;
+  private JLabel mineLabel, timeLabel;
+  private JButton resetButton;
+  private boolean playing = true;
+
+  public Grid(int mode, String theme, JFrame frame, JPanel panel, JLabel mineLabel, JLabel timeLabel, JButton resetButton){
+    this.mode = mode;
+    this.theme = theme;
+    this.frame = frame;
+    this.panel = panel;
+    this.mineLabel = mineLabel;
+    this.timeLabel = timeLabel;
+    this.resetButton = resetButton;
+    setTheme(theme);
+    resetButton.setIcon(facesmile);
+    resetButton.setPressedIcon(facepressed);
+    resetButton.setPreferredSize(new Dimension(facesmile.getIconWidth(),facesmile.getIconHeight()));
+    createGrid();
   }
-  public void createGrid(int mode, JPanel panel){ //find a way to
+  public void createGrid(){
   	firstClick = true;
+    playing = true;
     if(mode == BEGINNER){
-      grid = new Tile[9][9];
+      rows = 9;
+      cols = 9;
       bombs = 10;
     }
     else if(mode == INTERMEDIATE){
-      grid = new Tile[16][16];
+      rows = 16;
+      cols = 16;
       bombs = 40;
     }
     else if(mode == EXPERT){
-      grid = new Tile[16][30];
+      rows = 16;
+      cols = 30;
       bombs = 99;
     }
-    for(int row = 0; row < grid.length; row++){
-      for(int col = 0; col < grid[0].length; col++){
+    initBombs = bombs;
+    numSelected = 0;
+
+    panel.setLayout(new GridLayout(rows,cols));
+    grid = new Tile[rows][cols];
+
+    timer = new java.util.Timer();
+    time = 0;
+    mineLabel.setText("Mine count: "+bombs);
+    for(int row = 0; row < rows; row++){
+      for(int col = 0; col < cols; col++){
         Tile tile = new Tile(row,col);
         tile.getButton().addMouseListener(new MouseAdapter() {
+          @Override
+          public void mousePressed(MouseEvent e) {
+            if(playing) resetButton.setIcon(faceooh);
+          }
 					@Override
 					public void mouseReleased(MouseEvent e) {
-							int row = tile.getX();
-							int col = tile.getY();
-						if(e.getButton() == MouseEvent.BUTTON1){
+            if(playing) resetButton.setIcon(facesmile);
+						int row = tile.getX();
+						int col = tile.getY();
+						if(playing && e.getButton() == MouseEvent.BUTTON1){
 							if(firstClick){
 								init(row,col);
 								firstClick = false;
 							}
-							if(tile.getState() == BOMB)
-								System.out.println("YOU LOSE");
+							if(tile.getValue() == BOMB && tile.getState() != FLAG){
+                tile.setState(BOMB);
+                revealBombs(tile);
+              }
 							else if(tile.getState() != FLAG){
-								System.out.println("METHOD TO REVEAL TILE AND FIND NUMBER OF ADJACENT BOMBS");
+                expand(tile);
+                if(numSelected == rows*cols-initBombs)
+                  win();
 							}
 						}
-						if(e.getButton() == MouseEvent.BUTTON3){
-							if(tile.getState() == EMPTY)
-								tile.setState(FLAG);
+						if(playing && e.getButton() == MouseEvent.BUTTON3){
+							if(tile.getState() == BLOCK){
+                tile.setState(FLAG);
+                bombs--;
+                mineLabel.setText("Mine count: "+bombs);
+              }
 							else if(grid[row][col].getState() == FLAG){
-								tile.setState(EMPTY);
+                tile.setState(BLOCK);
+                bombs++;
+                mineLabel.setText("Mine count: "+bombs);
 							}
 						}
 					}
@@ -78,6 +128,8 @@ public static final int FLAG = -1;
         panel.add(grid[row][col].getButton());
       }
     }
+    frame.setSize(32*getNumCols(),32*getNumRows()+95);
+    frame.revalidate();
   }
 
 
@@ -87,25 +139,33 @@ public static final int FLAG = -1;
       int col = (int)(Math.random()*grid[0].length);
 
 
-      if(grid[row][col].getState() != BOMB && row != x && col != y && getNeighbors(row,col).size() > 0){ //bomb cannot be on first click
-        grid[row][col].setState(BOMB);
-        grid[row][col].getButton().setText("BOMB");
+      if(grid[row][col].getValue() != BOMB && row != x && col != y && !getNeighbors(x,y).contains(grid[row][col])){ //bomb cannot be on first click
+        grid[row][col].setValue(BOMB);
       }else
         n--;
     }
-
+  }
+  public void setNumbers(int x, int y){
+    for(int row = 0; row < rows; row++){
+      for(int col = 0; col < cols; col++){
+        if(grid[row][col].getValue() != BOMB && (row != x || col != y)){
+          int numMines = (int)getNeighbors(row,col).stream().filter(neighbor -> neighbor.getValue() == BOMB).count();
+          grid[row][col].setValue(numMines);
+        }
+      }
+    }
   }
   public void init(int x, int y){ //get location of first click so set bombs after each click
     setBombs(x,y);
-    timer = new java.util.Timer();
-  	time = 0;
+    setNumbers(x,y);
     timer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
 				time+=1;
-				System.out.println(time);
+				timeLabel.setText("Time: "+time);
 			}
 		}, 1000,1000);
+    grid[x][y].setValue(0);
 	}
 
   public ArrayList<Tile> getNeighbors(int row, int col) { //get adjacent nodes (up to 8)
@@ -122,14 +182,105 @@ public static final int FLAG = -1;
             int tx = row + x;
             int ty = col + y;
 
-            if (tx >= 0 && tx < grid.length && ty >= 0 && ty < grid[0].length) //checks if it is in bounds
+            if (tx >= 0 && tx < rows && ty >= 0 && ty < cols) //checks if it is in bounds
                 neighbors.add(grid[tx][ty]);
         }
     }
     return neighbors;
   }
 
-  public int getNumRows(){return grid.length;}
-  public int getNumCols(){return grid[0].length;}
+  public ArrayList<Tile> getNeighbors(Tile tile){
+    return getNeighbors(tile.getX(),tile.getY());
+  }
+
+  public void expand(Tile tile){
+    if(tile.getButton().isEnabled()){
+      numSelected++;
+      tile.setState(tile.getValue());
+      if(tile.getValue() == 0){
+        getNeighbors(tile).stream().filter(neighbor -> neighbor.getButton().isEnabled()).forEach(neighbor -> expand(neighbor));
+      }
+    }
+  }
+
+  public void revealBombs(Tile tile){ //lose
+    if(playing){
+      playing = false;
+      timer.cancel();
+      Arrays.stream(grid).flatMap(a->Arrays.stream(a)).forEach(t -> {
+        t.getButton().setEnabled(false);
+        t.setImage(t.getIcon(t.getState())); //set disabled icon
+      });
+      Arrays.stream(grid).flatMap(a->Arrays.stream(a)).filter(t -> t.getValue() == BOMB && t != tile).forEach(t -> t.setState(t.getValue()));
+      tile.setImage(clickedmine);
+      resetButton.setIcon(facedead);
+    }
+  }
+
+  public void win(){
+    if(playing){
+      playing = false;
+      timer.cancel();
+      Arrays.stream(grid).flatMap(a->Arrays.stream(a)).forEach(tile -> {
+        if(tile.getValue() == BOMB && tile.getState() != FLAG)
+          tile.setState(FLAG);
+        tile.getButton().setEnabled(false);
+        tile.setImage(tile.getIcon(tile.getState()));
+      });
+      resetButton.setIcon(facewin);
+    }
+  }
+
+  public int getNumRows(){return rows;}
+  public int getNumCols(){return cols;}
+
+  public void reset(){
+    timer.cancel();
+    timeLabel.setText("Time: 0");
+    frame.remove(panel);
+    panel = new JPanel();
+    frame.add(panel,BorderLayout.CENTER);
+    resetButton.setIcon(facesmile);
+    resetButton.setPressedIcon(facepressed);
+    resetButton.setPreferredSize(new Dimension(facesmile.getIconWidth(),facesmile.getIconHeight()));
+    createGrid();
+  }
+  public void reset(int mode){
+    this.mode = mode;
+    reset();
+  }
+  public void reset(String theme){
+    this.theme = theme;
+    setTheme(theme);
+    reset();
+  }
+
+
+  public void setTheme(String theme){
+    block = resizeIcon(new ImageIcon("assets/"+theme+"/block.png"));
+    empty = resizeIcon(new ImageIcon("assets/"+theme+"/empty.png"));
+    one = resizeIcon(new ImageIcon("assets/"+theme+"/one.png"));
+    two = resizeIcon(new ImageIcon("assets/"+theme+"/two.png"));
+    three = resizeIcon(new ImageIcon("assets/"+theme+"/three.png"));
+    four = resizeIcon(new ImageIcon("assets/"+theme+"/four.png"));
+    five = resizeIcon(new ImageIcon("assets/"+theme+"/five.png"));
+    six = resizeIcon(new ImageIcon("assets/"+theme+"/six.png"));
+    seven = resizeIcon(new ImageIcon("assets/"+theme+"/seven.png"));
+    eight = resizeIcon(new ImageIcon("assets/"+theme+"/eight.png"));
+    mine = resizeIcon(new ImageIcon("assets/"+theme+"/mine.png"));
+    clickedmine = resizeIcon(new ImageIcon("assets/"+theme+"/clickedmine.png"));
+    flagged = resizeIcon(new ImageIcon("assets/"+theme+"/flagged.png"));
+    facedead = resizeIcon(new ImageIcon("assets/"+theme+"/facedead.png"));
+    faceooh = resizeIcon(new ImageIcon("assets/"+theme+"/faceooh.png"));
+    facepressed = resizeIcon(new ImageIcon("assets/"+theme+"/facepressed.png"));
+    facesmile = resizeIcon(new ImageIcon("assets/"+theme+"/facesmile.png"));
+    facewin = resizeIcon(new ImageIcon("assets/"+theme+"/facewin.png"));
+  }
+
+  public ImageIcon resizeIcon(ImageIcon icon){
+    Image img = icon.getImage() ;  
+    Image newimg = img.getScaledInstance( Tile.WIDTH, Tile.HEIGHT,  java.awt.Image.SCALE_SMOOTH ) ;  
+    return new ImageIcon( newimg );
+  }
 
 }
